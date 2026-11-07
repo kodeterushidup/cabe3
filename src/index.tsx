@@ -114,7 +114,7 @@ app.get(
         description: 'Greeting API',
       },
       servers: [
-        { url: 'http://localhost:5173', description: 'Local Server' },
+        { url: process.env.BASE_URL, description: 'Local Server' },
       ],
     },
   })
