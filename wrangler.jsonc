@@ -1,7 +1,27 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "cabe3",
-  "compatibility_date": "2025-08-03",
-  "compatibility_flags": ["nodejs_compat"],
-  "main": "./src/index.tsx"
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "cabe3",
+	"compatibility_date": "2025-08-03",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"main": "./src/index.tsx",
+	"ai": {
+		"binding": "AI"
+	},
+	"vectorize": [
+		{
+			"binding": "VECTORIZE",
+			"index_name": "cabe3-documents",
+			"remote": true
+		}
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "cabe3",
+			"database_id": "3bcadaa0-25d2-4824-ba22-11dbc7bd8b5e",
+			"remote": true
+		}
+	]
 }
