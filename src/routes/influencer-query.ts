@@ -2,9 +2,11 @@ import { Hono } from 'hono'
 import { generateText, stepCountIs, tool } from 'ai'
 import { describeRoute, resolver, validator } from 'hono-openapi'
 import { z } from 'zod'
-import type { Env } from '../lib/env'
+import type { AppEnv } from '../lib/env'
 import { findInfluencerById, queryInfluencers } from '../lib/influencers'
 import { provider } from '../lib/provider'
+import { requireApiAuth } from '../middleware/auth'
+import { requireQuota } from '../middleware/quota'
 
 const MODEL_ID = 'liquid/lfm-3-1.7b:free'
 
@@ -37,15 +39,17 @@ const errorResponseSchema = z.object({
   message: z.string(),
 })
 
-export const influencerQueryRoutes = new Hono<{ Bindings: Env }>()
+export const influencerQueryRoutes = new Hono<AppEnv>()
 
 influencerQueryRoutes.post(
   '/influencers/query',
+  requireApiAuth,
+  requireQuota,
   describeRoute({
     tags: ['AI'],
     summary: 'Ask a natural-language question about the influencers table',
     description:
-      'Sends the prompt to `liquid/lfm-3-1.7b:free` on OpenRouter with two Vercel AI SDK tools: `searchInfluencers` runs a filtered, parameterised D1 query, and `getInfluencer` fetches one row by id. The endpoint returns the model answer plus every tool call and its result.',
+      'Requires a signed-in user and costs 1 request from their quota. Sends the prompt to `liquid/lfm-3-1.7b:free` on OpenRouter with two Vercel AI SDK tools: `searchInfluencers` runs a filtered, parameterised D1 query, and `getInfluencer` fetches one row by id. The endpoint returns the model answer plus every tool call and its result.',
     requestBody: {
       required: true,
       content: {

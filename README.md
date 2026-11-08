@@ -137,9 +137,11 @@ The endpoint needs a YouTube Data API v3 key. Locally it comes from
 npx wrangler secret put YOUTUBE_API_KEY
 ```
 
-Each search costs 100 quota units, so the free daily quota allows 100 searches.
-When the key is missing the endpoint answers `503`; when YouTube rejects the
-call or the quota is exhausted it answers `502`.
+Each search costs one request from your quota; new accounts start with 100
+free requests. When the key is missing the endpoint answers `503`; when YouTube
+rejects the call it answers `502`; when the quota is empty it answers `402`.
+Both influencer endpoints require a signed-in session (see
+[Accounts, quota, and payments](#accounts-quota-and-payments)).
 
 ## Natural-language influencer query
 
@@ -155,9 +157,13 @@ you can see which query produced the answer. The agent loop stops after 5 steps.
 
 ```sh
 curl -X POST http://localhost:5173/influencers/query \
+  -b cookies.txt \
   -H "Content-Type: application/json" \
   -d '{"prompt":"Which Brazilian fitness creators have more than 100k followers?"}'
 ```
+
+`cookies.txt` is the cookie jar saved from `POST /login`; the endpoint answers
+`401` without a session.
 
 ```json
 {
@@ -173,6 +179,75 @@ curl -X POST http://localhost:5173/influencers/query \
 ```
 
 The provider key comes from `PROVIDER_API_KEY` in `.dev.vars`.
+
+## Accounts, quota, and payments
+
+The app has a small SaaS layer on top of the influencer API:
+
+- `GET /register` and `POST /register` — create an account. New accounts get
+  **100 free requests**. There is no email verification.
+- `GET /login` and `POST /login` — sign in with email and password. The session
+  lives in an HttpOnly cookie (`cabe_session`) for 30 days.
+- `POST /logout` — delete the session.
+- `GET /dashboard` — remaining quota, recent API calls, and the top-up button.
+- `GET /api/me` — JSON endpoint with the signed-in user and remaining quota.
+
+`GET /influencers/search` and `POST /influencers/query` require a signed-in
+user. Each call reserves one request from `users.quota_remaining`, writes a row
+to `api_requests`, and refunds the request when the endpoint answers with a 4xx
+or 5xx status. When the quota is empty the endpoint answers `402`.
+
+### Buying quota with DOKU
+
+The only plan is **1,000 requests for Rp50.000**. `POST /billing/checkout`
+creates a `PENDING` order, asks DOKU Checkout for a payment URL, and redirects
+the browser there.
+
+Set these values locally in `.dev.vars`:
+
+```txt
+DOKU_CLIENT_ID=BRN-...
+DOKU_API_KEY=SK-...
+DOKU_IS_PRODUCTION=false
+```
+
+`DOKU_API_KEY` is the DOKU **Secret Key**. In production set both values as
+secrets and switch the API host with `DOKU_IS_PRODUCTION=true`:
+
+```sh
+npx wrangler secret put DOKU_CLIENT_ID
+npx wrangler secret put DOKU_API_KEY
+npx wrangler secret put DOKU_IS_PRODUCTION
+```
+
+DOKU sends the payment result to the webhook below. The endpoint verifies the
+`Signature` header with the same HMAC-SHA256 scheme used to create the payment,
+checks the invoice and amount, then adds the 1,000 credits in one D1 batch. A
+`credited_at` guard makes duplicate notifications safe.
+
+```txt
+POST <BASE_URL>/billing/doku/notification
+```
+
+The checkout request also sends this URL as
+`additional_info.override_notification_url`, so the webhook works without extra
+dashboard configuration. `BASE_URL` must be a public URL for DOKU to reach it;
+`http://localhost:5173` only works for local UI testing.
+
+`GET /payment/success` and `GET /payment/failed` are the pages DOKU redirects to
+after checkout. They do **not** grant quota by themselves — only the webhook
+does.
+
+### Quota tables
+
+`migrations/0002_users.sql` creates:
+
+| Table         | Purpose                                                        |
+| ------------- | -------------------------------------------------------------- |
+| `users`       | Email, PBKDF2 password hash, and `quota_remaining`             |
+| `sessions`    | SHA-256 hash of the session token and its expiry               |
+| `api_requests`| One row per influencer API call, with before/after quota values |
+| `orders`      | DOKU invoice, amount, quota amount, status, and payment URL     |
 
 ## Database
 

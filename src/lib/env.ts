@@ -83,4 +83,23 @@ export interface Env {
   VECTORIZE: VectorizeIndex
   DB: D1Database
   YOUTUBE_API_KEY?: string
+  BASE_URL?: string
+  DOKU_API_KEY?: string
+  DOKU_CLIENT_ID?: string
+  DOKU_IS_PRODUCTION?: string
+}
+
+export interface AuthUser {
+  id: number
+  email: string
+  name: string
+  quotaRemaining: number
+  createdAt: string
+}
+
+export type AppEnv = {
+  Bindings: Env
+  Variables: {
+    user: AuthUser
+  }
 }

@@ -1,9 +1,11 @@
 import { Hono } from 'hono'
 import { describeRoute, resolver, validator } from 'hono-openapi'
 import { z } from 'zod'
-import type { Env } from '../lib/env'
+import type { AppEnv } from '../lib/env'
 import { findYouTubeChannels, upsertYouTubeChannels } from '../lib/influencers'
 import { YouTubeError, searchYouTubeChannels } from '../lib/youtube'
+import { requireApiAuth } from '../middleware/auth'
+import { requireQuota } from '../middleware/quota'
 
 const searchQuerySchema = z.object({
   q: z
@@ -62,15 +64,17 @@ const errorResponseSchema = z.object({
   message: z.string(),
 })
 
-export const influencerRoutes = new Hono<{ Bindings: Env }>()
+export const influencerRoutes = new Hono<AppEnv>()
 
 influencerRoutes.get(
   '/influencers/search',
+  requireApiAuth,
+  requireQuota,
   describeRoute({
     tags: ['Influencers'],
     summary: 'Search YouTube channels and ingest them as influencers',
     description:
-      'Searches YouTube with `search.list` (type=channel), enriches the hits with subscriber and video counts from `channels.list`, then upserts them into the `influencers` table keyed by `(platform, handle)`. Existing YouTube rows are refreshed, never duplicated. The response returns the stored rows sorted by follower count.',
+      'Requires a signed-in user and costs 1 request from their quota. Searches YouTube with `search.list` (type=channel), enriches the hits with subscriber and video counts from `channels.list`, then upserts them into the `influencers` table keyed by `(platform, handle)`. Existing YouTube rows are refreshed, never duplicated. The response returns the stored rows sorted by follower count.',
     responses: {
       200: {
         description: 'The channels were searched, ingested, and read back from D1',
